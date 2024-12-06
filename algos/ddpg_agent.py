@@ -295,7 +295,7 @@ class ddpg_agent:
                 * self.env_params["action_max"]
                 * np.random.randn(*action.shape)
             ]
-        ).squeeze()
+        ).reshape(-1)
         action = action + gaussian_noise
         action = np.clip(
             action, -self.env_params["action_max"], self.env_params["action_max"]
@@ -306,7 +306,7 @@ class ddpg_agent:
                 low=-self.env_params["action_max"],
                 high=self.env_params["action_max"],
                 size=self.env_params["action"],
-            )
+            ).reshape(-1)
         return action
 
     def explore_policy(self, obs, goal):

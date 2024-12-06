@@ -18,10 +18,10 @@ def get_args():
     parser.add_argument(
         "--env-name",
         type=str,
-        default="PointMaze_UMaze-v3",  # DubinsUMaze-v0 PointMaze_UMaze-v3
+        default="AntMaze_UMaze-eval-v5",  # DubinsUMaze-v0 PointMaze_UMaze-eval-v3 AntMaze_UMaze-eval-v5
         help="the environment name",
     )
-    parser.add_argument("--test", type=str, default="PointMaze_UMaze-eval-v3")
+    parser.add_argument("--test", type=str, default="AntMaze_UMaze-eval-v5")
     parser.add_argument(
         "--n-epochs",
         type=int,
@@ -135,7 +135,7 @@ def get_args():
     parser.add_argument("--schedule_n_nodes", action="store_true")
     parser.add_argument("--node_decay", type=float, default=0.5)
     parser.add_argument("--min_landmark", type=int, default=200)
-    parser.add_argument("--eval-freq", type=int, default=10)
+    parser.add_argument("--eval-freq", type=int, default=20)
 
     # PIG
     parser.add_argument("--lambda_goal_loss", type=float, default=1.0)
