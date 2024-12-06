@@ -15,17 +15,17 @@
 
 module purge # nettoyer les modules herites par defaut
 conda deactivate # desactiver les environnements herites par defaut
-module load ??
-conda activate ???
+module load python/3.10.4
+conda activate pig_gymnasium310
 
 
 set -x # activer l’echo des commandes
 
 echo "START"
-./scripts/train_DubinsUmaze.sh
-# ./scripts/train_Dubins3Umaze.sh
-# ./scripts/train_PointMaze_UMaze.sh
+./scripts/train_DubinsUmaze.sh ${SLURM_ARRAY_TASK_ID}
+# ./scripts/train_Dubins3Umaze.sh ${SLURM_ARRAY_TASK_ID}
+# ./scripts/train_PointMaze_UMaze.sh ${SLURM_ARRAY_TASK_ID}
 echo "FINISHED"
 
 
-## ${SLURM_ARRAY_TASK_ID}
+## 

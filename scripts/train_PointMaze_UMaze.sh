@@ -19,5 +19,4 @@ python train_ddpg.py \
 --jump_temp 10 \
 --seed ${SEED} \
 --n_eval 5 \
---mode online \
 --group g0
