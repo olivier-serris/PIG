@@ -2,3 +2,7 @@
 runs*
 .idea
 *.ipynb
+wandb
+saved_models
+runs
+.vscode

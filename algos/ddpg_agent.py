@@ -9,10 +9,37 @@ from algos.replay_buffer import replay_buffer
 from algos.her import her_sampler
 from planner.goal_plan import *
 import utils
+import gymnasium as gym
+import json
+
+from gymnasium_evaluator import AgentAPI, MazeEvaluator
+import wandb
+
+
+class PIGAgentAPI(AgentAPI):
+    def __init__(self, agent: "ddpg_agent") -> None:
+        self.agent = agent
+
+    def __call__(self, agent_state, observation):
+
+        obs, goal = self.agent._preproc_inputs(
+            observation["observation"], observation["desired_goal"]
+        )
+        action = self.agent.planner_policy(
+            obs,
+            goal,
+            self.agent.args.plan_budget,
+            ref_loss=self.agent.goal_loss,
+            jump=self.agent.args.jump,
+        )
+        return None, action
+
+    def reset(self, agent_state, observation):
+        return self.agent.planner_policy.reset()
 
 
 class ddpg_agent:
-    def __init__(self, args, env, env_params, test_env):
+    def __init__(self, args, env: gym.Env, env_params, test_env: gym.Env):
         self.args = args
         self.env = env
         self.test_env = test_env
@@ -21,19 +48,26 @@ class ddpg_agent:
         self.resume = args.resume
         self.resume_epoch = args.resume_epoch
         current_time = datetime.now().strftime("%b%d_%H-%M-%S")
+        self.maze_evaluator = MazeEvaluator(args.test, args.n_eval, vec_implem=False)
+        self.agent_api = PIGAgentAPI(self)
+        wandb.init(
+            project=args.project,
+            config={**vars(args), "algo": {"name": "PIG"}},
+            entity=args.entity,
+            mode=args.mode,
+        )
 
-        self.writer = None
-        self.writer = SummaryWriter(
-            log_dir="runs/ddpg" + current_time + "_" + str(args.env_name)
-        )
-        if not os.path.exists(self.args.save_dir):
-            os.mkdir(self.args.save_dir)
-            # path to save the model
-        self.model_path = os.path.join(
-            self.args.save_dir, self.args.env_name + "_" + current_time
-        )
-        if not os.path.exists(self.model_path):
-            os.mkdir(self.model_path)
+        # self.writer = None
+        if not args.loading:
+            log_dir = "runs/ddpg" + current_time + "_" + str(args.env_name)
+            self.writer = SummaryWriter(log_dir=log_dir)
+            with open(os.path.join(log_dir, "config.txt"), "w") as f:
+                json.dump(vars(args), f, indent=4)
+
+                # path to save the model
+            self.model_path = os.path.join(log_dir, "checkpoints")
+            if not os.path.exists(self.model_path):
+                os.mkdir(self.model_path)
         self.actor_network = actor(env_params)
         self.actor_target_network = actor(env_params)
         self.critic_network = criticWrapper(self.env_params, self.args)
@@ -61,6 +95,7 @@ class ddpg_agent:
                     + ".pt"
                 )[0]
             )
+            self.buffer = torch.load(self.args.resume_path + "/replaybuffer.pt")
 
         # load the weights into the target networks
         self.actor_target_network.load_state_dict(self.actor_network.state_dict())
@@ -79,22 +114,23 @@ class ddpg_agent:
         self.critic_optim = torch.optim.Adam(
             self.critic_network.parameters(), lr=self.args.lr_critic
         )
-        # her sampler
-        self.her_module = her_sampler(
-            self.args.replay_strategy,
-            self.args.replay_k,
-            self.args.distance,
-            self.args.future_step,
-        )
-        # create the replay buffer
-        fetch_task = True if args.env_name == "Pusher-v0" else False
-        self.buffer = replay_buffer(
-            self.env_params,
-            self.args.buffer_size,
-            self.her_module.sample_her_transitions,
-            self.args.plan_budget,
-            fetch_task=fetch_task,
-        )
+        if self.resume == False:
+            # her sampler
+            self.her_module = her_sampler(
+                self.args.replay_strategy,
+                self.args.replay_k,
+                self.args.distance,
+                self.args.future_step,
+            )
+            # create the replay buffer
+            fetch_task = True if args.env_name == "Pusher-v0" else False
+            self.buffer = replay_buffer(
+                self.env_params,
+                self.args.buffer_size,
+                self.her_module.sample_her_transitions,
+                self.args.plan_budget,
+                fetch_task=fetch_task,
+            )
         self.planner_policy = Planner(
             agent=self,
             replay_buffer=self.buffer,
@@ -137,7 +173,7 @@ class ddpg_agent:
                 [],
                 [],
             )
-            observation = self.env.reset()
+            observation, info = self.env.reset()
             obs = observation["observation"]
             ag = observation["achieved_goal"]
             g = observation["desired_goal"]
@@ -163,10 +199,12 @@ class ddpg_agent:
                         action = self.explore_policy(act_obs, act_g)
                         subgoal = g
                         subgoal_series = g.reshape(1, -1)
-                        subgoal_series = np.repeat(subgoal_series, self.args.plan_budget, axis=0)
+                        subgoal_series = np.repeat(
+                            subgoal_series, self.args.plan_budget, axis=0
+                        )
                         path_len = 1
                     # feed the actions into the environment
-                observation_new, _, _, info = self.env.step(action)
+                observation_new, _, _, _, info = self.env.step(action)
                 self.env_timestep += 1
                 obs_new = observation_new["observation"]
                 ag_new = observation_new["achieved_goal"]
@@ -210,47 +248,36 @@ class ddpg_agent:
             self.sum_goal_loss = 0
             # start to do the evaluation
             if epoch % self.args.eval_freq == 0:
-                success_rate = self._eval_agent()
-                test_sucess_rate = self._eval_test_agent(epoch=epoch)
-                test_no_plan_success_rate = self._eval_test_agent_no_plan(
-                    policy=self.test_policy
-                )
+                eval_infos = self.maze_evaluator.evaluate(self.agent_api, None)
+                wandb.log(eval_infos, step=epoch * self.env_params["max_timesteps"])
                 print(
-                    "[{}] epoch is: {}, eval success rate is: {:.3f}, {:.3f}, {:.3f}".format(
-                        datetime.now(),
-                        epoch,
-                        success_rate,
-                        test_sucess_rate,
-                        test_no_plan_success_rate,
-                    )
+                    datetime.now(),
+                    epoch * self.env_params["max_timesteps"],
                 )
-                # torch.save([self.critic_network.state_dict()], \
-                #            self.model_path + '/critic_model_' +str(epoch) +'.pt')
-                # torch.save([self.actor_network.state_dict()], \
-                #             self.model_path + '/actor_model_' +str(epoch) +'.pt')
-                # torch.save(self.buffer, self.model_path + '/replaybuffer.pt')
+                torch.save(
+                    [self.critic_network.state_dict()],
+                    self.model_path + "/critic_model_" + str(epoch) + ".pt",
+                )
+                torch.save(
+                    [self.actor_network.state_dict()],
+                    self.model_path + "/actor_model_" + str(epoch) + ".pt",
+                )
+                torch.save(self.buffer, self.model_path + "/replaybuffer.pt")
 
-                self.writer.add_scalar(
-                    "data/train" + self.args.env_name + self.args.metric,
-                    success_rate,
-                    epoch,
-                )
-                self.writer.add_scalar(
-                    "data/test" + self.args.env_name + self.args.metric,
-                    test_sucess_rate,
-                    epoch,
-                )
-                self.writer.add_scalar(
-                    "data/test_no_plan" + self.args.env_name + self.args.metric,
-                    test_no_plan_success_rate,
-                    epoch,
-                )
+                # self.writer.add_scalar(
+                #     "data/test" + self.args.env_name + self.args.metric,
+                #     test_sucess_rate,
+                #     epoch,
+                # )
+                # self.writer.add_scalar(
+                #     "data/test_no_plan" + self.args.env_name + self.args.metric,
+                #     test_no_plan_success_rate,
+                #     epoch,
+                # )
                 self.writer.add_scalar("data/critic_loss", critic_loss, epoch)
                 self.writer.add_scalar("data/actor_loss", actor_loss, epoch)
                 self.writer.add_scalar("data/goal_loss", goal_loss, epoch)
-                self.writer.add_scalar(
-                    "data/env_timestep", self.env_timestep, epoch
-                )
+                self.writer.add_scalar("data/env_timestep", self.env_timestep, epoch)
 
     # pre_process the inputs
     def _preproc_inputs(self, obs, g):
@@ -262,11 +289,14 @@ class ddpg_agent:
     def _select_actions(self, pi):
         action = pi.cpu().numpy().squeeze()
         # add the gaussian
-        action += (
-            self.args.noise_eps
-            * self.env_params["action_max"]
-            * np.random.randn(*action.shape)
-        )
+        gaussian_noise = np.array(
+            [
+                self.args.noise_eps
+                * self.env_params["action_max"]
+                * np.random.randn(*action.shape)
+            ]
+        ).squeeze()
+        action = action + gaussian_noise
         action = np.clip(
             action, -self.env_params["action_max"], self.env_params["action_max"]
         )
@@ -295,7 +325,7 @@ class ddpg_agent:
     def test_policy(self, obs, goal):
         pi = self.actor_network(obs, goal)
         # convert the actions
-        actions = pi.detach().cpu().numpy().squeeze()
+        actions = pi.detach().cpu().numpy().squeeze(0)
         return actions
 
     # soft update
@@ -395,21 +425,29 @@ class ddpg_agent:
     def _eval_agent(self, policy=None):
         if policy is None:
             policy = self.test_policy
-
         total_success_rate = []
-        for _ in range(self.args.n_test_rollouts):
+        eval_options = self.env.get_wrapper_attr("eval_options")
+        n_eval = eval_options["goal_pos"].shape[0]
+        for i in range(n_eval):
+            # for _ in range(self.args.n_test_rollouts):
+            options = {k: v[i] for k, v in eval_options.items()}
             per_success_rate = []
-            observation = self.env.reset()
+            observation, infos = self.env.reset(options=options)
             obs = observation["observation"]
             g = observation["desired_goal"]
             for _ in range(self.env_params["max_timesteps"]):
                 with torch.no_grad():
                     act_obs, act_g = self._preproc_inputs(obs, g)
                     actions = policy(act_obs, act_g)
-                observation_new, _, _, info = self.env.step(actions)
+                observation_new, reward, terminated, truncated, info = self.env.step(
+                    actions
+                )
                 obs = observation_new["observation"]
                 g = observation_new["desired_goal"]
-                per_success_rate.append(info["is_success"])
+                per_success_rate.append(info["success"])
+                done = terminated or truncated
+                if done:
+                    break
             total_success_rate.append(per_success_rate)
         total_success_rate = np.array(total_success_rate)
         global_success_rate = np.mean(total_success_rate[:, -1])
@@ -421,10 +459,14 @@ class ddpg_agent:
             policy.reset()
 
         total_success_rate = []
-        for _ in range(self.args.n_test_rollouts):
+        eval_options = self.env.get_wrapper_attr("eval_options")
+        n_eval = eval_options["goal_pos"].shape[0]
+        for i in range(n_eval):
+            # for _ in range(self.args.n_test_rollouts):
+            options = {k: v[i] for k, v in eval_options.items()}
             policy.reset()
             per_success_rate = []
-            observation = self.test_env.reset()
+            observation, infos = self.test_env.reset(options=options)
             obs = observation["observation"]
             g = observation["desired_goal"]
 
@@ -438,35 +480,54 @@ class ddpg_agent:
                         ref_loss=self.goal_loss,
                         jump=self.args.jump,
                     )
-                observation_new, rew, done, info = self.test_env.step(actions)
+                observation_new, reward, terminated, truncated, info = (
+                    self.test_env.step(actions)
+                )
+
                 obs = observation_new["observation"]
                 g = observation_new["desired_goal"]
-                per_success_rate.append(info["is_success"])
-            total_success_rate.append(per_success_rate)
+                # per_success_rate.append(info["is_success"])
+                per_success_rate.append(info["success"])
+                done = terminated or truncated
+                if done:
+                    break
+            total_success_rate.append(info["success"])
 
         total_success_rate = np.array(total_success_rate)
-        global_success_rate = np.mean(total_success_rate[:, -1])
+        global_success_rate = np.mean(total_success_rate)
         return global_success_rate
 
     def _eval_test_agent_no_plan(self, policy):
         total_success_rate = []
-        for _ in range(self.args.n_test_rollouts):
+
+        eval_options = self.env.get_wrapper_attr("eval_options")
+        n_eval = eval_options["goal_pos"].shape[0]
+        for i in range(n_eval):
+            # for _ in range(self.args.n_test_rollouts):
+            options = {k: v[i] for k, v in eval_options.items()}
             # policy.reset()
             per_success_rate = []
-            observation = self.test_env.reset()
+            observation, infos = self.test_env.reset(options=options)
             obs = observation["observation"]
             g = observation["desired_goal"]
             for num in range(self.env_params["max_test_timesteps"]):
                 with torch.no_grad():
                     act_obs, act_g = self._preproc_inputs(obs, g)
                     actions = policy(act_obs, act_g)
-                observation_new, rew, done, info = self.test_env.step(actions)
+                observation_new, reward, terminated, truncated, info = (
+                    self.test_env.step(actions)
+                )
+
                 obs = observation_new["observation"]
                 g = observation_new["desired_goal"]
-                per_success_rate.append(info["is_success"])
-            total_success_rate.append(per_success_rate)
+                per_success_rate.append(info["success"])
+                # per_success_rate.append(info["is_success"])
+                done = terminated or truncated
+                if done:
+                    break
+            total_success_rate.append(info["success"])
         total_success_rate = np.array(total_success_rate)
-        global_success_rate = np.mean(total_success_rate[:, -1])
+        global_success_rate = np.mean(total_success_rate)
         return global_success_rate
 
     def pairwise_value(self, obs, goal):

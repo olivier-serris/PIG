@@ -170,7 +170,7 @@ class Planner:
         obs,
         goal=None,
         series_budgets=None,
-        ref_loss=0.,
+        ref_loss=0.0,
         jump=False,
     ):
         self.goal_idx_series = []

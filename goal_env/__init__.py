@@ -1,19 +1,20 @@
 import sys
 
 sys.path.append("../")
-from gym.envs.registration import register
-import gym
-from goal_env.bitflip import BitFlipEnv
-from goal_env.fourroom import FourRoom, FourRoom2, FourRoom3, FourRoom4
-from goal_env.mountaincar import MountainCarEnv
-from goal_env.plane import (
-    NaivePlane,
-    NaivePlane2,
-    NaivePlane3,
-    NaivePlane4,
-    NaivePlane5,
-)
-from goal_env.goal_plane_env import GoalPlane
+from gymnasium.envs.registration import register
+import gymnasium as gym
+
+# from goal_env.bitflip import BitFlipEnv
+# from goal_env.fourroom import FourRoom, FourRoom2, FourRoom3, FourRoom4
+# from goal_env.mountaincar import MountainCarEnv
+# from goal_env.plane import (
+#     NaivePlane,
+#     NaivePlane2,
+#     NaivePlane3,
+#     NaivePlane4,
+#     NaivePlane5,
+# )
+# from goal_env.goal_plane_env import GoalPlane
 
 register(
     id="Bitflip-v0",

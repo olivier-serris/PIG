@@ -9,14 +9,23 @@ Here are the param for the training
 def get_args():
     parser = argparse.ArgumentParser()
     # the environment setting
+
+    # parser.add_argument(
+    #     "--env-name", type=str, default="PointMaze_Open", help="the environment name"
+    # )
+    # parser.add_argument("--test", type=str, default="PointMaze_Open")
+
     parser.add_argument(
-        "--env-name", type=str, default="PointMaze-v1", help="the environment name"
+        "--env-name",
+        type=str,
+        default="PointMaze_UMaze-v3",  # DubinsUMaze-v0 PointMaze_UMaze-v3
+        help="the environment name",
     )
-    parser.add_argument("--test", type=str, default="PointMaze-v1")
+    parser.add_argument("--test", type=str, default="PointMaze_UMaze-eval-v3")
     parser.add_argument(
         "--n-epochs",
         type=int,
-        default=14000,
+        default=1000,
         help="the number of epochs to train the agent",
     )
     parser.add_argument(
@@ -33,6 +42,7 @@ def get_args():
         default="saved_models/",
         help="the path to save the models",
     )
+    parser.add_argument("--loading", type=bool, default=False)
 
     parser.add_argument(
         "--noise-eps", type=float, default=0.2, help="noise factor for Gaussian"
@@ -81,7 +91,7 @@ def get_args():
         default="MLP",
         help="the metric for the distance embedding",
     )
-    parser.add_argument("--device", type=str, default="cpu", help="cuda device")
+    parser.add_argument("--device", type=str, default="cuda:0", help="cuda device")
 
     parser.add_argument(
         "--lr-decay-actor", type=int, default=3000, help="actor learning rate decay"
@@ -100,7 +110,7 @@ def get_args():
 
     parser.add_argument("--resume", action="store_true", help="resume or not")
     # Will be considered only if resume is True
-    parser.add_argument("--resume-epoch", type=int, default=10000, help="resume epoch")
+    parser.add_argument("--resume-epoch", type=int, default=1000, help="resume epoch")
     parser.add_argument(
         "--resume-path",
         type=str,
@@ -114,11 +124,11 @@ def get_args():
     parser.add_argument(
         "--initial-sample",
         type=int,
-        default=1000,
+        default=100,
         help="number of initial candidates for landmarks",
     )
     parser.add_argument(
-        "--clip-v", type=float, default=-4.0, help="clip bound for the planner"
+        "--clip-v", type=float, default=-10.0, help="clip bound for the planner"
     )
     parser.add_argument("--goal-thr", type=float, default=-10)
     parser.add_argument("--heat", type=float, default=0.9)
@@ -133,6 +143,13 @@ def get_args():
     parser.add_argument("--plan_budget", type=int, default=10)
     parser.add_argument("--jump", action="store_true")
     parser.add_argument("--jump_temp", type=float, default=0.1)
+
+    ## additionnal for eval:
+    parser.add_argument("--entity", type=str, default="AMAC-DRL")
+    parser.add_argument("--project", type=str, default="MHRL-Article")
+    parser.add_argument("--n_eval", type=int, default=5)
+    parser.add_argument("--mode", type=str, default="offline")
+    parser.add_argument("--group", type=str, default="")
 
     args = parser.parse_args()
     return args
