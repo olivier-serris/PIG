@@ -25,6 +25,7 @@ echo "START"
 ./scripts/train_DubinsUmaze.sh ${SLURM_ARRAY_TASK_ID}
 # ./scripts/train_Dubins3Umaze.sh ${SLURM_ARRAY_TASK_ID}
 # ./scripts/train_PointMaze_UMaze.sh ${SLURM_ARRAY_TASK_ID}
+# ./scripts/train_AntMaze_Umaze.sh ${SLURM_ARRAY_TASK_ID}
 echo "FINISHED"
 
 
