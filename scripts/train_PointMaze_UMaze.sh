@@ -5,11 +5,10 @@ python train_ddpg.py \
 --test PointMaze_UMaze-eval-v3 \
 --device cuda:0 \
 --random-eps 0.2 \
---device cuda:0 \
 --gamma 0.99 \
 --n-epochs 334 \
 --period 3 \
---distance 0.1 \
+--distance 0.45 \
 --fps \
 --landmark 400 \
 --initial-sample 500 \

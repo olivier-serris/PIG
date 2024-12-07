@@ -52,7 +52,7 @@ class ddpg_agent:
         self.agent_api = PIGAgentAPI(self)
         wandb.init(
             project=args.project,
-            config={**vars(args), "algo": {"name": "PIG"}},
+            config={**vars(args), "algo": {"name": "PIG"}, "task": {"eval_task_name" : args.test}},
             entity=args.entity,
             mode=args.mode,
         )

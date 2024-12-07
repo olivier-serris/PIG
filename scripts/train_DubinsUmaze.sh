@@ -3,10 +3,10 @@ SEED=$1
 python train_ddpg.py \
 --env-name DubinsUMaze-v0 \
 --test DubinsUMaze-v0 \
---random-eps 0.2 \
 --device cuda:0 \
+--random-eps 0.2 \
 --gamma 0.99 \
---n-epochs 1250 \
+--n-epochs 1430 \
 --period 3 \
 --distance 0.1 \
 --fps \
@@ -17,5 +17,6 @@ python train_ddpg.py \
 --lambda_goal_loss 0.001 \
 --jump_temp 10 \
 --seed ${SEED} \
+--eval-freq 70 \
 --n_eval 5 \
 --group g0
