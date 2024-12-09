@@ -50,11 +50,18 @@ class ddpg_agent:
         current_time = datetime.now().strftime("%b%d_%H-%M-%S")
         self.maze_evaluator = MazeEvaluator(args.test, args.n_eval, vec_implem=False)
         self.agent_api = PIGAgentAPI(self)
+        dict_config = {
+            **vars(args),
+            "algo": {"name": "PIG"},
+            "task": {"eval_task_name": args.test},
+        }
+        print(dict_config)
         wandb.init(
             project=args.project,
-            config={**vars(args), "algo": {"name": "PIG"}, "task": {"eval_task_name" : args.test}},
+            config=dict_config,
             entity=args.entity,
             mode=args.mode,
+            group=args.group,
         )
 
         # self.writer = None

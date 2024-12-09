@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 SEED=$1
+GROUP=$2
 python train_ddpg.py \
 --env-name Dubins3UMaze-v0 \
 --test Dubins3UMaze-v0 \
@@ -19,4 +20,7 @@ python train_ddpg.py \
 --seed ${SEED} \
 --eval-freq 25 \
 --n_eval 5 \
---group g0
+--group $GROUP 
+
+# epoch * max_ep_steps = total train timesteps
+#1500*200=300_000 steps
