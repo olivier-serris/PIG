@@ -11,6 +11,7 @@ from planner.goal_plan import *
 import utils
 import gymnasium as gym
 import json
+from pprint import pprint
 
 from gymnasium_evaluator import AgentAPI, MazeEvaluator
 import wandb
@@ -55,7 +56,7 @@ class ddpg_agent:
             "algo": {"name": "PIG"},
             "task": {"eval_task_name": args.test},
         }
-        print(dict_config)
+        pprint(dict_config)
         wandb.init(
             project=args.project,
             config=dict_config,
